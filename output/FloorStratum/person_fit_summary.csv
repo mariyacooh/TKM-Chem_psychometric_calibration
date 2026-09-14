@@ -1,0 +1,4 @@
+﻿Stratum,N,Zh_mean,Zh_SD,N_misfit,Pct_misfit,Gstar_mean,Gstar_SD,N_Gstar_undefined
+floor,73,-0.021,0.630,1,1.4,0.363,0.158,0
+no-floor,180,0.236,0.637,2,1.1,0.351,0.172,45
+all,253,0.162,0.644,3,1.2,0.356,0.167,45

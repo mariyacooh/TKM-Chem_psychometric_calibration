@@ -1,0 +1,18 @@
+﻿Metric,Value
+Outcome,(b) превышение только на hub-пунктах
+Reading,альтернативный путь решения (методологический фактор)
+N_floor,73
+Floor_cut,8
+Mean_score_floor,6.589
+Implied_mean_p,0.253
+Structural_bound_p,0.308
+P_guess,0.25
+Hub_mean_p,0.409
+Hub_p_holm,1e-04
+Rest_mean_p,0.207
+Rest_p_holm,0.0018
+Hub_minus_rest,0.202
+Hub_vs_rest_p,1e-04
+Cochran_Q_p,0
+N_items_above_guess,3
+N_items_below_guess,1

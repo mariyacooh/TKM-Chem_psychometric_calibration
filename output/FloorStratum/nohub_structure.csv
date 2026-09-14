@@ -1,0 +1,2 @@
+﻿K_items,N,alpha,alpha_ord,omega_t,omega_h,H,Smoothed,nfact_FA,ncomp_PCA,CFA_1F_cfi,CFA_1F_tli,CFA_1F_rmsea,CFA_1F_srmr,CFA_3F_cfi,CFA_3F_tli,CFA_3F_rmsea,CFA_3F_srmr
+20,253,0.935,0.97,0.976,0.848,0.496,TRUE,2,1,0.994,0.993,0.031,0.059,1,1,0,0.048

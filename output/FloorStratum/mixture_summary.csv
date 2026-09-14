@@ -1,0 +1,12 @@
+﻿Metric,Value
+Pi_random,0.2816
+N_posterior_gt_0.5,74
+Pct_posterior_gt_0.5,29.2
+logLik_mixture,-3112.53
+logLik_2PL_only,-3173.78
+AIC_mixture,6331.06
+AIC_2PL_only,6451.56
+BIC_mixture,6518.33
+BIC_2PL_only,6635.29
+EM_iterations,25
+Converged,TRUE

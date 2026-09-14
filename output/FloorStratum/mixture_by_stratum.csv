@@ -1,0 +1,4 @@
+﻿Stratum,N,N_random,Pct_random,Mean_P_random
+floor,73,55,75.3,0.711
+no-floor,180,19,10.6,0.107
+all,253,74,29.2,0.282
