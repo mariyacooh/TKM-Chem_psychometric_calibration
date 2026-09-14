@@ -1,0 +1,17 @@
+Данные в этом каталоге (input/) распространяются на условиях
+Creative Commons Attribution 4.0 International (CC BY 4.0).
+
+Copyright (c) 2026 Mariya Kabysheva
+
+Разрешается копировать, распространять и перерабатывать материал в любом формате
+и для любых целей, включая коммерческие, при условии указания авторства.
+
+Полный текст лицензии: https://creativecommons.org/licenses/by/4.0/legalcode
+Краткое изложение:     https://creativecommons.org/licenses/by/4.0/deed.ru
+
+Файлы, покрытые этой лицензией:
+  google_forms_responses.xlsx  — обезличенная выгрузка ответов (N=253)
+  items.csv, answer_key.csv, region_map.csv — структура теста и справочники
+
+Код репозитория этой лицензией НЕ покрыт — он распространяется по MIT
+(см. LICENSE в корне).

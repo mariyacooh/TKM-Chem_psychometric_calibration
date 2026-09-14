@@ -1,0 +1,771 @@
+---
+title: "Психометрический отчёт — тест критического мышления (ТКМ-Хим)"
+subtitle: "Сопроводительные материалы: полные таблицы, рисунки и статистики"
+date: "Обновлено: `r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    toc_title: "Содержание"
+    number_sections: true
+    theme: cosmo
+    self_contained: true
+    fig_caption: true
+---
+
+<style>
+details > summary { cursor: pointer; font-weight: 600; margin: 0.4em 0; }
+details > pre { font-size: 0.8em; line-height: 1.25; overflow-x: auto;
+                background: #f7f7f9; padding: 0.75em; border-radius: 4px; }
+.caveat { border-left: 4px solid #d9534f; background: #fdf3f2;
+          padding: 0.5em 0.9em; margin: 1em 0; border-radius: 3px; }
+figure figcaption { font-size: 0.85em; color: #555; text-align: center; margin-top: 0.3em; }
+img { max-width: 100%; height: auto; }
+</style>
+
+Полный набор психометрических результатов по тесту критического мышления в химии
+(ТКМ-Хим): таблицы, рисунки и подробные статистики, которые в статье приведены в
+сокращённом виде.
+
+Порядок разделов следует логике психометрического обоснования инструмента:
+выборка и структура теста, описательная статистика, качество вариантов ответа,
+внутренняя структура (EFA, CFA, ESEM), надёжность и разложение дисперсии в
+бифакторной модели, параметры пунктов в IRT (модель Раша и 2PL), инвариантность
+относительно языка формы (DIF) и валидность по известным группам. В каждом
+разделе итоговая таблица идёт вместе с относящимися к ней рисунками; развёрнутые
+статистики убраны в раскрывающиеся блоки.
+
+Тест предъявлялся в двух языковых формах — казахской (KZ) и русской (RU). Там,
+где различие форм влияет на трактовку результата, это отмечено в тексте раздела.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# Рабочая директория = корень проекта (подъём до scripts/config.R)
+root <- normalizePath(getwd(), winslash = "/")
+while (!file.exists(file.path(root, "scripts", "config.R")) && root != dirname(root)) {
+  root <- dirname(root)
+}
+knitr::opts_knit$set(root.dir = root)
+
+library(dplyr)
+library(readr)
+library(knitr)
+```
+
+```{r helpers}
+source("scripts/config.R")   # ITEMS / SUBSCALES / EXCLUDED_ITEMS / ABSENT_ITEMS
+source("scripts/_artifacts.R")    # require_input() + граф зависимостей шагов
+
+OUT <- "output"      # относительно корня проекта (рабочая директория чанков)
+IMG <- "../output"   # относительно scripts/ (так pandoc находит рисунки)
+
+# Сошлась ли бифакторная 2PL? Индексы пишутся 6_2pl.R ТОЛЬКО при сходимости, их
+# наличие — единственный источник правды о статусе модели. Весь текст про бифактор
+# 2PL ниже ветвится по этому флагу, чтобы отчёт не утверждал сходимость, которой нет.
+bf2pl_ok <- file.exists(file.path(OUT, "2PL/2pl_bifactor_indices.csv"))
+
+# Сошлись ли БАЗОВЫЕ 1PL/2PL? От них зависят все a/b, LRT, M2*, TIF/SEM и
+# EAP-теты, но их таблицы выводятся прямыми tbl(), поэтому статус читается из
+# артефакта 6_2pl.R (2pl_model_status.csv), а не остаётся прозой в текстовой выдаче.
+# Артефакта нет => NA: ни сходимость, ни её отсутствие не утверждаются.
+base2pl_ok <- local({
+  p <- file.path(OUT, "2PL/2pl_model_status.csv")
+  if (!file.exists(p)) return(NA)
+  st <- tryCatch(readr::read_csv(p), error = function(e) NULL)
+  if (is.null(st) || !all(c("Model", "Converged") %in% names(st))) return(NA)
+  all(as.logical(st$Converged))
+})
+
+# Сошлась ли бифакторная CFA? 3_efa_cfa.R пишет конечный CFI в её строку файла
+# bifactor_fit_table.csv ТОЛЬКО при сходимости (иначе NA). Это — источник правды о
+# статусе CFA-бифактора (аналог bf2pl_ok для 2PL). Захардкоженная оговорка о
+# несходимости противоречила бы самой таблице на наборе пунктов, где бифакторная
+# сходится (ср. DECISIONS.md D3 vs D4), поэтому статус читается из артефакта.
+# Строка ищется по ярлыку MODEL_BI ("Бифакторная CFA") — ярлык называет модель, а
+# не позицию, поэтому матч не переедет на соседнюю строку при смене их порядка.
+bicfa_ok <- local({
+  p <- file.path(OUT, "Bifactor/bifactor_fit_table.csv")
+  if (!file.exists(p)) return(FALSE)
+  ft <- tryCatch(readr::read_csv(p), error = function(e) NULL)
+  if (is.null(ft) || !all(c("Model", "CFI") %in% names(ft))) return(FALSE)
+  cfi_bi <- as.numeric(ft$CFI[grepl("^Бифакторная", ft$Model)])
+  length(cfi_bi) == 1 && is.finite(cfi_bi)
+})
+
+# Сглаживалась ли корреляционная матрица при расчёте omega? Статус пишет
+# 3_efa_cfa.R в omega_matrix_status.csv (min eigenvalue тетрахорической матрицы).
+# Захардкоженная оговорка противоречила бы расчёту: на другом наборе пунктов
+# матрица может оказаться положительно определённой.
+omega_smoothed <- local({
+  p <- file.path(OUT, "Bifactor/omega_matrix_status.csv")
+  if (!file.exists(p)) return(FALSE)
+  st <- tryCatch(readr::read_csv(p), error = function(e) NULL)
+  !is.null(st) && "Smoothed" %in% names(st) && isTRUE(as.logical(st$Smoothed[1]))
+})
+
+# Бимодален ли суммарный балл? Флаг и его составляющие пишет 2_bimodality.R в
+# extreme_patterns.csv. Оговорка об alpha/omega ветвится по нему, а не по прозе:
+# коэффициенты внутренней согласованности растут с разбросом выборки, и на
+# однородной выборке та же оговорка была бы неверной. Числа для текста оговорки
+# (доли краёв, BC) берутся из того же артефакта, а не повторяются литералами.
+bimodal_stats <- local({
+  p <- file.path(OUT, "Bimodality/extreme_patterns.csv")
+  if (!file.exists(p)) return(NULL)
+  tryCatch(readr::read_csv(p), error = function(e) NULL)
+})
+score_bimodal <- !is.null(bimodal_stats) && "Bimodal" %in% names(bimodal_stats) &&
+  isTRUE(as.logical(bimodal_stats$Bimodal[1]))
+
+# Монотонность показателей по границам среза — ИЗМЕРЕНИЕ шага 2
+# (Bimodality/cut_monotonicity.csv), а не свойство, объявляемое прозой: набор
+# монотонных метрик зависит от прогона, и заявление о нём противоречило бы градиенту,
+# напечатанному в том же разделе. Таблица артефакта целиком (вердикт плюс охват), из неё
+# именованный логический вектор с возможным NA: NA = метрика не оценивалась ни в одной
+# развёртке. NULL = артефакта нет или он старше mono_one() в scripts/2_bimodality.R,
+# тогда отчёт не утверждает ни монотонности, ни её отсутствия.
+cut_mono_tbl <- local({
+  p <- file.path(OUT, "Bimodality/cut_monotonicity.csv")
+  if (!file.exists(p)) return(NULL)
+  m <- tryCatch(readr::read_csv(p), error = function(e) NULL)
+  if (is.null(m) || !all(c("Metric", "Monotone", "N_assessed", "N_points") %in% names(m)) ||
+      !nrow(m)) return(NULL)
+  m
+})
+cut_monotone <- if (is.null(cut_mono_tbl)) NULL else
+  stats::setNames(as.logical(cut_mono_tbl$Monotone), cut_mono_tbl$Metric)
+# Имена метрик для прозы, в порядке артефакта; %in% удерживает NA вне обеих ветвей.
+# Охват (N_assessed / N_points) идёт рядом с именем метрики, когда он неполон: точка,
+# снятая гейтом сходимости шага 2, в вердикт не входит, и вердикт относится к
+# ОЦЕНЁННЫМ точкам развёртки, а не ко всем её точкам.
+mono_names <- function(sel) {
+  paste(sprintf("<code>%s</code>%s", cut_mono_tbl$Metric[sel],
+                ifelse(cut_mono_tbl$N_assessed[sel] < cut_mono_tbl$N_points[sel],
+                       sprintf(" (%d точек из %d)", cut_mono_tbl$N_assessed[sel],
+                               cut_mono_tbl$N_points[sel]),
+                       "")),
+        collapse = ", ")
+}
+
+# Значимые омнибусные групповые сравнения (8_anova_known_groups.R ->
+# group_tests_significance.csv). NULL = артефакта нет, тогда отчёт не утверждает
+# ни значимости, ни её отсутствия. Утверждение "все p >= 0.05" прозой
+# противоречило бы статистикам ANOVA под ним, поэтому считается из артефакта.
+sig_group_tests <- local({
+  p <- file.path(OUT, "ANOVA/group_tests_significance.csv")
+  if (!file.exists(p)) return(NULL)
+  gt <- tryCatch(readr::read_csv(p), error = function(e) NULL)
+  if (is.null(gt) || !all(c("Family", "Score", "p") %in% names(gt))) return(NULL)
+  dplyr::filter(gt, !is.na(p), p < 0.05)
+})
+all_groups_ns <- !is.null(sig_group_tests) && nrow(sig_group_tests) == 0
+
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Экранирование для безопасной вставки текстовой выдачи в <pre>
+esc <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  x <- gsub(">", "&gt;", x, fixed = TRUE)
+  x
+}
+
+# Таблица из CSV. collapse=TRUE прячет длинные таблицы в раскрывающийся блок.
+# Отсутствующий артефакт помечается ВИДИМО, но в терминах содержания (название
+# таблицы), а не пути к файлу или скрипта, который его пишет: HTML читает
+# аудитория статьи, диагностика неполного прогона идёт в консоль.
+tbl <- function(relpath, caption = NULL, digits = 3, n = Inf, collapse = FALSE) {
+  path <- file.path(OUT, relpath)
+  if (!file.exists(path)) {
+    cat(sprintf("_Таблица «%s» недоступна: результаты этого анализа отсутствуют._\n\n",
+                caption %||% "без названия"))
+    return(invisible(NULL))
+  }
+  d <- readr::read_csv(path)
+  if (is.finite(n)) d <- utils::head(d, n)
+  if (collapse) {
+    cat(sprintf("<details><summary>%s (%d строк)</summary>\n",
+                caption %||% "Таблица", nrow(d)))
+    cat(knitr::kable(d, format = "html", digits = digits,
+                     table.attr = 'class="table table-condensed"'))
+    cat("\n</details>\n\n")
+  } else {
+    print(knitr::kable(d, caption = caption, digits = digits))
+    cat("\n\n")
+  }
+}
+
+# Расширение рисунков берётся из того же источника, что и у скриптов графиков —
+# PLOT_FORMAT в scripts/plots/_plot_utils.R. Каждый рисунок пишется и в tiff (для
+# подачи в журнал), и в png; PLOT_FORMAT называет тот из набора, который читает
+# отчёт, и это png: тег <img> в браузере TIFF не отображает. Формат отчёта лежит
+# прямо в plots/, остальные — в plots/<формат>/ (fmt_paths в _plot_utils.R),
+# поэтому пути ниже остаются путями внутри plots/. Пути в вызовах fig()
+# ниже записаны с .png (действующее значение); при смене PLOT_FORMAT литеральное
+# .png не нашло бы ни одного файла, и все рисунки отчёта молча выродились бы в
+# пометку «рисунок недоступен» — отказ выглядел бы штатной деградацией, а не ошибкой
+# конфигурации. Модуль источится в отдельное окружение: нужна одна константа.
+PLOT_EXT <- local({
+  e <- new.env()
+  ok <- tryCatch({ sys.source("scripts/plots/_plot_utils.R", envir = e); TRUE },
+                 error = function(err) FALSE)
+  if (ok && is.character(e$PLOT_FORMAT) && length(e$PLOT_FORMAT) == 1L &&
+      nzchar(e$PLOT_FORMAT)) e$PLOT_FORMAT else "png"
+})
+
+# Рисунок с видимой подписью. Явный <figure>/<figcaption>: implicit_figures pandoc
+# в режиме html4 подпись не показывает (уходит только в alt). src встраивается
+# в self-contained HTML на этапе --embed-resources.
+fig <- function(relpath, caption, width = "95%") {
+  relpath <- sub("\\.png$", paste0(".", PLOT_EXT), relpath)
+  if (!file.exists(file.path(OUT, relpath))) {
+    cat(sprintf("_Рисунок «%s» недоступен._\n\n", caption)); return(invisible(NULL))
+  }
+  cat(sprintf(paste0('<figure style="text-align:center; margin:1.2em 0;">',
+                     '<img src="%s/%s" alt="%s" style="max-width:%s; height:auto;">',
+                     '<figcaption>%s</figcaption></figure>\n\n'),
+              IMG, relpath, esc(caption), width, esc(caption)))
+}
+
+# Развёрнутая текстовая выдача анализа в раскрывающемся блоке. Её отсутствие
+# помечается ВИДИМО, как в tbl()/fig(): тихий пропуск не даёт отличить в HTML
+# «анализ не выполнялся» от «у анализа нет текстовой выдачи».
+log_block <- function(relpath, label = "Развёрнутые статистики", open = FALSE) {
+  path <- file.path(OUT, relpath)
+  if (!file.exists(path)) {
+    cat(sprintf("_%s недоступны._\n\n", label))
+    return(invisible(NULL))
+  }
+  txt <- paste(readLines(path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  cat(sprintf("<details%s><summary>%s</summary>\n<pre>",
+              if (open) " open" else "", label))
+  cat(esc(txt))
+  cat("</pre>\n</details>\n\n")
+}
+```
+
+```{r known_caveats, results='asis'}
+# Сводка оговорок формируется из флагов, прочитанных из output/ (bicfa_ok/bf2pl_ok,
+# base2pl_ok, omega_smoothed, all_groups_ns), чтобы шапка отчёта не противоречила таблицам ниже:
+# набор пунктов определяет и сходимость бифактора (DECISIONS.md D3/D4), и
+# положительную определённость матрицы, и значимость сравнений.
+notes <- if (bicfa_ok) {
+  "бифакторная CFA сошлась (раздел [CFA](#cfa))"
+} else {
+  "бифакторная CFA не сошлась (раздел [CFA](#cfa))"
+}
+if (isTRUE(!base2pl_ok)) {
+  notes <- c(notes, "базовая 1PL/2PL не сошлась (раздел [2PL IRT](#irt-2pl))")
+}
+if (omega_smoothed) {
+  notes <- c(notes, paste0("матрица корреляций сглажена при расчёте omega (раздел ",
+                           "[Надёжность](#nadyozhnost-i-bifaktornaya-model))"))
+}
+if (score_bimodal) {
+  notes <- c(notes, paste0("распределение суммарного балла бимодально, поэтому alpha и omega ",
+                           "завышены разбросом выборки (раздел ",
+                           "[Бимодальность](#bimodalnost-vyborki))"))
+}
+if (all_groups_ns) {
+  notes <- c(notes, paste0("все групповые сравнения незначимы (раздел ",
+                           "[Валидность](#validnost-po-izvestnym-gruppam-anova))"))
+} else if (!is.null(sig_group_tests)) {
+  notes <- c(notes, sprintf(paste0("групповых сравнений с p < 0.05: %d (раздел ",
+                                   "[Валидность](#validnost-po-izvestnym-gruppam-anova))"),
+                            nrow(sig_group_tests)))
+}
+cat(sprintf("**Известные оговорки** (детали в соответствующих разделах): %s.\n\n",
+            paste(notes, collapse = "; ")))
+```
+
+# Выборка и структура теста {#vyborka}
+
+```{r overview, results='asis'}
+# Единственный жёсткий вход отчёта: без него нечего описывать. Остальные артефакты
+# отсутствуют «по частям» и заменяются видимой пометкой через tbl()/fig()/log_block().
+require_input(file.path(OUT, "cleaned_responses.csv"), "scripts/0_preprocess.R (шаг 0)")
+df <- readr::read_csv(file.path(OUT, "cleaned_responses.csv"))
+
+cat(sprintf(paste0("**N = %d** респондентов. Пунктов в анализе: **%d**. ",
+                   "Исключены из анализов: %s. Отсутствуют в схеме форм: %s.\n\n"),
+            nrow(df), length(ITEMS),
+            paste(EXCLUDED_ITEMS, collapse = ", "),
+            paste(ABSENT_ITEMS, collapse = ", ")))
+
+sub_lbl <- c(S1 = "Интерпретация", S2 = "Анализ", S3 = "Оценка")
+struct <- data.frame(
+  Субшкала = names(SUBSCALES),
+  Название = sub_lbl[names(SUBSCALES)],
+  Пунктов  = vapply(SUBSCALES, length, integer(1)),
+  Пункты   = vapply(SUBSCALES, function(x) paste(x, collapse = ", "), character(1)),
+  check.names = FALSE, row.names = NULL
+)
+print(kable(struct, caption = "Структура субшкал"))
+cat("\n\n")
+
+# Частоты демографии НЕ считаются здесь: их считает шаг 1 (freq_table), и отчёт
+# читает готовый артефакт. Свой table()/prop.table() был бы вторым источником тех
+# же долей — то, что убирает D8: report.html и report.md брали бы их из
+# разного кода и могли разойтись при правке одной из реализаций.
+tbl("Descriptive/descriptive_stats_tables.csv",
+    "Распределение: язык формы, курс, регион, самооценка успеваемости, конференции")
+```
+
+## Итоговые баллы
+
+```{r scores, results='asis'}
+detailed <- file.path(OUT, "Descriptive/descriptive_stats_detailed.csv")
+if (file.exists(detailed)) {
+  d <- readr::read_csv(detailed)
+  sc <- dplyr::filter(d, grepl("^Score_", Variable))
+  print(kable(sc, caption = "Общий балл и субшкалы: описательная статистика", digits = 3))
+  cat("\n\n")
+} else {
+  cat("_Описательная статистика баллов недоступна._\n\n")
+}
+```
+
+# Описательная статистика {#opisatelnaya-statistika}
+
+```{r descriptive, results='asis'}
+if (file.exists(detailed)) {
+  d <- readr::read_csv(detailed)
+  it <- dplyr::filter(d, grepl("^Q", Variable))
+  # Пункты дихотомические, поэтому 1_descriptive_stats.R не считает по ним
+  # Shapiro-Wilk: колонки пришли бы сплошь NA. Целиком пустые колонки снимаются,
+  # чтобы таблица не показывала столбец из одних NA (для Score_* они остаются).
+  it <- it[, vapply(it, function(x) !all(is.na(x)), logical(1)), drop = FALSE]
+  print(kable(it, caption = "Пункты: описательная статистика (доля верных, разброс, форма)", digits = 3))
+  cat("\n\n")
+} else {
+  cat("_Описательная статистика по пунктам недоступна._\n\n")
+}
+fig("Descriptive/plots/sample_composition.png",
+    "Состав выборки: язык анкеты, курс, самооценка успеваемости, участие в конференциях")
+tbl("Descriptive/descriptive_stats_by_course.csv", "Баллы по курсам", digits = 2)
+fig("Descriptive/plots/score_density_by_course.png",
+    "Распределение общего балла по курсам: частоты, ядерная плотность и медиана")
+log_block("Descriptive/descriptive_stats.txt")
+```
+
+# Бимодальность выборки {#bimodalnost-vyborki}
+
+```{r bimodality_intro, results='asis'}
+# Текст ветвится по score_bimodal (см. чанк helpers): статус и числа берутся из
+# Bimodality/extreme_patterns.csv. Раздел стоит ПЕРЕД разделами моделей, потому
+# что определяет, как читаются их коэффициенты.
+if (score_bimodal && !is.null(bimodal_stats)) {
+  st <- bimodal_stats
+  # p теста Хартигана интерполируется по таблице квантилей и при большом D
+  # обращается ровно в 0 — это предел таблицы, а не вычисленная вероятность.
+  dip_p <- if (st$Dip_p[1] < 1e-4) "p &lt; 0.0001" else sprintf("p = %.4f", st$Dip_p[1])
+  cat(sprintf(paste0(
+    "Распределение суммарного балла бимодально: коэффициент бимодальности ",
+    "<code>BC = %.3f</code> при ссылочном уровне <code>%.3f</code>, тест провала ",
+    "Хартигана <code>D = %.4f</code> (%s). На полу (<= %d баллов) находится ",
+    "%.1f %% выборки, на потолке (>= %d) — %.1f %%; конвенциональный порог, за ",
+    "которым инструмент считается не покрывающим край шкалы, — 15 %% с каждой ",
+    "стороны.\n\n"),
+    st$BC[1], st$BC_ref[1], st$Dip[1], dip_p,
+    st$Floor_cut[1], st$Pct_floor[1], st$Ceiling_cut[1], st$Pct_ceiling[1]))
+  cat('<div class="caveat"><strong>Оговорка.</strong> Коэффициенты внутренней ',
+      "согласованности не являются свойством одних только пунктов: они растут с ",
+      "разбросом выборки. При таком распределении alpha и omega частично измеряют ",
+      "разделение групп респондентов, а не связность пунктов, поэтому читать их как ",
+      "доказательство однородности пунктов нельзя. Таблица чувствительности ниже ",
+      "показывает, насколько они падают при усечении крайних баллов.</div>\n\n",
+      sep = "")
+} else if (!is.null(bimodal_stats)) {
+  cat(sprintf(paste0(
+    "Распределение суммарного балла унимодально: <code>BC = %.3f</code> не ",
+    "превышает ссылочного уровня <code>%.3f</code>.\n\n"),
+    bimodal_stats$BC[1], bimodal_stats$BC_ref[1]))
+}
+```
+
+```{r bimodality_tables, results='asis'}
+tbl("Bimodality/extreme_patterns.csv", "Крайние паттерны и мера бимодальности", digits = 4)
+fig("Bimodality/plots/score_total_distribution.png",
+    "Распределение суммарного балла по всей выборке: полосы пола и потолка")
+tbl("Bimodality/score_total_frequency.csv", "Частоты по каждому значению балла",
+    digits = 1, collapse = TRUE)
+tbl("Bimodality/subsample_sensitivity.csv",
+    "Надёжность и согласие CFA при усечении крайних баллов", digits = 3)
+tbl("Bimodality/subsample_known_groups.csv",
+    "Валидность по известным группам на тех же подвыборках (p)", digits = 3)
+fig("Bimodality/plots/cut_sensitivity.png",
+    "Градиент alpha, H и средней дискриминации по границе усечения")
+tbl("Bimodality/cut_sensitivity.csv", "Чувствительность к границам среза",
+    digits = 3, collapse = TRUE)
+```
+
+```{r bimodality_gradient_note, results='asis'}
+# Монотонность не заявляется прозой: перечисление собирается из cut_monotone (см.
+# чанк helpers), иначе текст противоречил бы таблице и рисунку прямо над ним.
+if (score_bimodal) {
+  cat("Естественного порога, на котором выборка распадалась бы на группы, нет: ",
+      "значение на любой ОДНОЙ границе — артефакт её выбора, а не измерение, а ",
+      "результатом является сам градиент. ", sep = "")
+  if (is.null(cut_monotone)) {
+    cat("Монотонность показателей по развёрткам в этом прогоне не измерена: ",
+        "артефакт <code>Bimodality/cut_monotonicity.csv</code> отсутствует. ", sep = "")
+  } else {
+    parts <- character(0)
+    if (any(cut_monotone %in% TRUE))
+      parts <- c(parts, sprintf("во всех трёх развёртках монотонны %s",
+                                mono_names(cut_monotone %in% TRUE)))
+    if (any(cut_monotone %in% FALSE))
+      parts <- c(parts, sprintf("монотонность нарушена хотя бы в одной развёртке у %s",
+                                mono_names(cut_monotone %in% FALSE)))
+    if (anyNA(cut_monotone))
+      parts <- c(parts, sprintf("не оценивались (нет двух точек ни в одной развёртке) %s",
+                                mono_names(is.na(cut_monotone))))
+    cat(sprintf("По измерению шага 2 (<code>Bimodality/cut_monotonicity.csv</code>): %s. ",
+                paste(parts, collapse = "; ")))
+    # Охват называется числом там, где он неполон, поэтому асимметрия его чтения
+    # проговаривается один раз: пропуск способен создать TRUE, но не FALSE.
+    if (any(cut_mono_tbl$N_assessed < cut_mono_tbl$N_points))
+      cat("Названный числом охват неполон: точка развёртки, на которой рефит 2PL не ",
+          "сошёлся, снята вместе со своим значением (<code>Conv_2PL = FALSE</code> в ",
+          "таблице выше), поэтому вердикт о монотонности относится к ОЦЕНЁННЫМ точкам; ",
+          "установленная немонотонность от пропусков не зависит. ", sep = "")
+  }
+  cat("Колонка <code>omega_h</code> в проверку монотонности не входит: она приведена ",
+      "как свидетельство нестабильности и интерпретации не подлежит.\n\n", sep = "")
+}
+```
+
+```{r bimodality_log, results='asis'}
+log_block("Bimodality/bimodality_report.txt", "Развёрнутые статистики: бимодальность выборки")
+```
+
+# Дистракторный анализ (CTT) {#distraktornyj-analiz}
+
+Скрининг пунктов классической теории тестов: доля выбора и точечно-бисериальная
+корреляция каждого варианта ответа. Тепловая карта — обзорный вид; полная таблица
+по всем вариантам ниже в раскрывающемся блоке.
+
+KZ- и RU-формы — разные переводы с разными текстами вариантов, поэтому буквы
+раздаются внутри своей формы (`A` — верный вариант формы по ключу ответов,
+`B` в KZ и `B` в RU — разные дистракторы), а доли и корреляции считаются по
+выборке своей формы.
+
+```{r distractor, results='asis'}
+fig("Distractor/plots/distractor_heatmap.png",
+    "Тепловая карта точечно-бисериальных корреляций (item-rest) по вариантам ответа")
+tbl("Distractor/distractor_pb_table.csv",
+    "Точечно-бисериальные по вариантам (все пункты, отдельно по языковым формам)",
+    digits = 3, collapse = TRUE)
+log_block("Distractor/distractor_analysis.txt")
+```
+
+# Разведочный факторный анализ (EFA) {#efa}
+
+```{r efa, results='asis'}
+tbl("EFA/efa_eigenvalues.csv", "Собственные значения", digits = 3, collapse = TRUE)
+tbl("EFA/efa_loadings.csv", "Факторные нагрузки (ML, oblimin, 3 фактора)", digits = 3)
+fig("EFA/plots/efa_scree.png", "Собственные значения (scree) и параллельный анализ")
+fig("EFA/plots/efa_loadings_heatmap.png", "Тепловая карта факторных нагрузок (EFA)")
+fig("EFA/plots/efa_fa_diagram.png", "Структура факторов EFA (psych::fa.diagram, по ведущей нагрузке)")
+log_block("EFA/efa_results.txt")
+```
+
+# Подтверждающий факторный анализ (CFA) {#cfa}
+
+Сравниваются три модели: однофакторная (1F-CFA), 3-факторная ICM-CFA и
+бифакторная CFA. Модель названа своей природой, а не позицией в таблице: ярлыки
+1F-CFA и 3F-ICM-CFA означают в разделе ESEM ниже те же две модели, что здесь.
+
+```{r cfa, results='asis'}
+tbl("Bifactor/bifactor_fit_table.csv",
+    "Сравнение моделей CFA (масштабированные индексы согласия, WLSMV)", digits = 3)
+```
+
+```{r cfa_caveat, results='asis'}
+# Текст ветвится по bicfa_ok (см. чанк helpers): отчёт не утверждает несходимость,
+# которой нет, и наоборот — статус берётся из bifactor_fit_table.csv, а не хардкодится.
+if (!bicfa_ok) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Бифакторная модель CFA не сошлась — ',
+      "оптимизатор не достиг сходимости, индексы согласия недоступны (<code>NA</code>). ",
+      "Ниже приведены результаты только для 1F-CFA и 3F-ICM-CFA. ", sep = "")
+  if (bf2pl_ok) {
+    cat("Бифакторная <em>2PL</em>-модель (раздел ",
+        '<a href="#nadyozhnost-i-bifaktornaya-model">Надёжность</a>) сошлась; ',
+        "неустойчива именно CFA-версия на текущем наборе пунктов.", sep = "")
+  } else {
+    cat("Бифакторная <em>2PL</em>-модель (раздел ",
+        '<a href="#nadyozhnost-i-bifaktornaya-model">Надёжность</a>) на этих данных ',
+        "<em>также не сошлась</em>: неустойчивы обе версии бифактора, что указывает на ",
+        "почти одномерную структуру с доминирующим общим фактором.", sep = "")
+  }
+  cat("</div>\n\n")
+} else {
+  cat("Бифакторная модель CFA сошлась на текущем наборе пунктов; её индексы ",
+      "согласия приведены в таблице выше и в развёрнутых статистиках бифакторной CFA ниже.\n\n",
+      sep = "")
+}
+```
+
+```{r cfa2, results='asis'}
+tbl("CFA/cfa_loadings.csv", "Нагрузки 3-факторной ICM-CFA (стандартизованные Beta)",
+    digits = 3)
+fig("CFA/plots/cfa_path_diagram.png",
+    "Схема измерительной модели 3-факторной ICM-CFA: какой пункт к какому фактору")
+fig("CFA/plots/cfa_loadings_forest.png",
+    "Стандартизованные нагрузки 3-факторной ICM-CFA с 95% ДИ; индексы согласия в подзаголовке")
+log_block("CFA/cfa_results.txt")
+```
+
+# ESEM: разведочная структурная модель {#esem}
+
+ESEM оценивает 3-факторную структуру в SEM-рамке (WLSMV, ordered — как CFA), но
+без запрета кросс-нагрузок: все пункты грузятся на все факторы, решение вращается
+(geomin, косоугольное). Это снимает главный дефект 3F-ICM-CFA. Раздел печатает
+три диагностики, и размерности касается только одна — прирост согласия 3F-ESEM над
+1F-CFA. Корреляции факторов измеряют различимость факторов вращения, а доля пунктов
+на «своём» факторе — согласие априорной приписки с полученной вращением, а не
+размерность. Вердикт о размерности разделом не выносится: вопрос зафиксирован
+открытым в обе стороны (решения D3 и D12 в DECISIONS.md).
+
+```{r esem, results='asis'}
+tbl("ESEM/esem_fit_table.csv",
+    "Согласие: 1F-CFA vs 3F-ICM-CFA vs 3F-ESEM (масштабированные индексы, WLSMV)",
+    digits = 3)
+tbl("ESEM/esem_factor_correlations.csv",
+    "Корреляции факторов ESEM (косоугольное решение)", digits = 3)
+tbl("ESEM/esem_loadings.csv", "Нагрузки ESEM (стандартизованные, geomin)",
+    digits = 3, collapse = TRUE)
+fig("ESEM/plots/esem_loadings_heatmap.png", "Тепловая карта нагрузок ESEM (geomin)")
+log_block("ESEM/esem_results.txt")
+```
+
+# Надёжность и бифакторная модель {#nadyozhnost-i-bifaktornaya-model}
+
+```{r reliability_intro, results='asis'}
+if (bf2pl_ok) {
+  cat("Индексы бифакторной модели рассчитаны по сошедшейся бифакторной 2PL. ",
+      "Коэффициенты альфа Кронбаха по субшкалам приведены в развёрнутых статистиках ",
+      "CFA выше.\n\n", sep = "")
+} else {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Бифакторная 2PL-модель ',
+      "<em>не сошлась</em> на текущем наборе пунктов, поэтому её нагрузки и индексы ",
+      "(<code>omega_h</code>, <code>omega_total</code>, ECV, PUC) не рассчитаны и в отчёте ",
+      "отсутствуют — это результат, а не пробел в анализе. Вероятная причина — доминирующий ",
+      "общий фактор при почти нулевой специфической дисперсии субшкал (та же near-одномерность, ",
+      "что валит и бифакторную CFA). Подробности — в развёрнутых статистиках 2PL ниже.</div>\n\n",
+      sep = "")
+}
+```
+
+```{r reliability, results='asis'}
+tbl("2PL/2pl_bifactor_indices.csv",
+    "Индексы бифакторной модели: omega_h, omega_total, ECV, PUC", digits = 3)
+tbl("2PL/2pl_bifactor_subscale_omega.csv",
+    "Надёжность субшкал: omega_s (полная) и omega_hs (за вычетом общего фактора)",
+    digits = 3)
+tbl("2PL/2pl_bifactor_loadings.csv",
+    "Нагрузки бифакторной 2PL (общий фактор G и специфические S1–S3)",
+    digits = 3, collapse = TRUE)
+fig("2PL/plots/2pl_bifactor_loadings.png",
+    "Нагрузки бифакторной 2PL: общий фактор G против специфических")
+```
+
+```{r omega_caveat, results='asis'}
+# Текст ветвится по omega_smoothed (см. чанк helpers): статус берётся из
+# Bifactor/omega_matrix_status.csv, а не хардкодится в прозе.
+if (omega_smoothed) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Матрица корреляций оказалась не ',
+      "положительно определённой; при расчёте omega выполнено сглаживание ",
+      "(<code>cor.smooth</code>), что указывает на коллинеарность или экстремальные ",
+      "паттерны ответов.</div>\n\n", sep = "")
+}
+# Вторая оговорка независима от первой: сглаживание — свойство матрицы, а
+# бимодальность — свойство выборки, и статусы приходят из разных артефактов.
+if (score_bimodal && !is.null(bimodal_stats)) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Приведённые коэффициенты ',
+      "получены на выборке с бимодальным распределением суммарного балла ",
+      sprintf("(пол %.1f %%, потолок %.1f %%; раздел ",
+              bimodal_stats$Pct_floor[1], bimodal_stats$Pct_ceiling[1]),
+      '<a href="#bimodalnost-vyborki">Бимодальность выборки</a>). Надёжность — ',
+      "характеристика теста НА ДАННОЙ ВЫБОРКЕ, и она растёт с её разбросом: при ",
+      "усечении крайних баллов alpha и шкалируемость падают (таблица ",
+      "чувствительности того же раздела). ", sep = "")
+  # Монотонность называется только по тем метрикам, для которых она ИЗМЕРЕНА шагом 2
+  # (cut_monotone, см. чанк helpers). omega здесь не упоминается: omega_h объявлен
+  # неинтерпретируемым на этих объёмах и в проверку монотонности не входит вовсе.
+  if (!is.null(cut_monotone) && any(cut_monotone %in% TRUE)) {
+    cat(sprintf(paste0("Монотонность этого падения измерена, а не заявлена, и держится ",
+                       "во всех трёх развёртках у %s; <code>omega_h</code> в проверку не ",
+                       "входит. "),
+                mono_names(cut_monotone %in% TRUE)))
+  }
+  cat("Читать эти значения как однородность пунктов или как воспроизводимую ",
+      "характеристику инструмента нельзя.</div>\n\n", sep = "")
+}
+```
+
+```{r reliability_log, results='asis'}
+log_block("Bifactor/omega_reliability.txt", "Развёрнутые статистики: расчёт omega")
+log_block("Bifactor/bifactor_cfa_results.txt", "Развёрнутые статистики: бифакторная CFA")
+```
+
+# Модель Раша (1PL) {#rasch}
+
+```{r rasch, results='asis'}
+tbl("Rasch/rasch_item_report.csv",
+    "Сложность и статистики согласия пунктов (Rasch)", digits = 3)
+fig("Rasch/plots/rasch_icc.png", "Характеристические кривые пунктов (Rasch)")
+fig("Rasch/plots/rasch_wright_map.png", "Карта Райта: пункты и способности")
+log_block("Rasch/rasch_report.txt")
+```
+
+# 2PL IRT {#irt-2pl}
+
+Двухпараметрическая модель (дискриминация `a`, трудность `b`) и её сравнение с Рашем.
+
+```{r irt2pl_caveat, results='asis'}
+# Ветвление по base2pl_ok (см. чанк helpers): если базовые модели не сошлись,
+# все таблицы ниже получены из недействительной оценки и это должно быть видно
+# в отчёте, а не только в текстовой выдаче шага.
+if (isTRUE(!base2pl_ok)) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Базовая 1PL и/или 2PL модель ',
+      "не сошлась. Параметры ",
+      "<code>a</code>/<code>b</code>, сравнение моделей, M2*, TIF/SEM и EAP-теты ",
+      "ниже получены из несошедшейся оценки и ненадёжны.</div>\n\n", sep = "")
+}
+```
+
+```{r irt2pl, results='asis'}
+tbl("2PL/2pl_params.csv", "Параметры 2PL (a, b, доля верных)", digits = 3)
+tbl("2PL/1pl_2pl_comparison.csv", "Сравнение 1PL и 2PL (информационные критерии)",
+    digits = 2)
+fig("2PL/plots/2pl_icc_all.png", "Характеристические кривые всех пунктов (2PL)")
+fig("2PL/plots/2pl_test_info.png", "Информационная функция теста (2PL)")
+tbl("2PL/2pl_tif_sem.csv",
+    "TIF/SEM в числах: максимум информации, значения при theta = 0 и диапазоны theta с приемлемой надёжностью",
+    digits = 3)
+fig("2PL/plots/2pl_ab_bubble.png", "Дискриминация (a) против трудности (b) по пунктам")
+fig("2PL/plots/2pl_wright_map.png", "Карта Райта (2PL): способности против трудностей")
+fig("2PL/plots/2pl_q3_heatmap.png",
+    "Локальная независимость: остаточные корреляции Yen's Q3 по всем парам пунктов")
+log_block("2PL/2pl_irt_results.txt")
+```
+
+# DIF: языковое смещение (kz vs ru) {#dif}
+
+```{r dif, results='asis'}
+tbl("DIF/dif_mh_table.csv", "Mantel-Haenszel DIF (skorr. p, lnOR, флаг)", digits = 3)
+fig("DIF/plots/dif_mh.png",
+    "DIF по Мантелю-Хензелю (kz vs ru): статистика MH chi2 слева, величина эффекта lnOR с 95% ДИ справа")
+log_block("DIF/dif_language_results.txt")
+```
+
+# Валидность по известным группам (ANOVA) {#validnost-po-izvestnym-gruppam-anova}
+
+Проверка различий в сырых баллах (общий и субшкалы S1-S3) по курсу, участию в
+конференциях, языку обучения, GPA и региону. WLE-тета шага Раша зависимой
+переменной не является: при полных данных она — строго возрастающая функция
+общего балла с вырожденной структурой связок, поэтому из раздела исключена
+(обоснование — решение D9 в DECISIONS.md).
+
+```{r anova_caveat, results='asis'}
+# Текст ветвится по all_groups_ns / sig_group_tests (см. чанк helpers): значимость
+# читается из ANOVA/group_tests_significance.csv, а не утверждается прозой, иначе
+# отчёт может противоречить статистикам ANOVA под ним.
+if (all_groups_ns) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Ни одно омнибусное групповое ',
+      "сравнение не достигло значимости (все p &gt;= 0.05). Полный набор статистик — ",
+      "в блоке ниже.</div>\n\n", sep = "")
+} else if (!is.null(sig_group_tests) && nrow(sig_group_tests) > 0) {
+  cat('<div class="caveat"><strong>Оговорка.</strong> Значимость достигнута в ',
+      sprintf("%d сравнениях: ", nrow(sig_group_tests)),
+      esc(paste(sprintf("%s / %s (p = %.4f)", sig_group_tests$Family,
+                        sig_group_tests$Score, sig_group_tests$p), collapse = "; ")),
+      ". Полный набор статистик — в блоке ниже.</div>\n\n", sep = "")
+}
+```
+
+```{r anova, results='asis'}
+fig("ANOVA/plots/anova_validity_groups.png",
+    "Общий балл по всем группирующим переменным шага 8: курс, GPA, конференции, язык")
+fig("ANOVA/plots/anova_validity_profile.png",
+    "Профиль субшкал по курсам: средние с 95% ДИ")
+log_block("ANOVA/anova_results.txt", "Развёрнутые статистики ANOVA (Левен, Уэлч, Краскел-Уоллис, MANOVA, t-тесты, GPA, регион)")
+```
+
+# Floor-страта: угадывание, пересчёт без пола, hub-кластер {#floor-strata}
+
+Шаг 10. Отбор в страту идёт по сумме баллов, поэтому средняя по всем 26 пунктам
+доля верных внутри неё тождественно равна `M(балл)/k` и сверху ограничена
+`Floor_cut/k`: общий **уровень** доли внутри страты задан отбором, а не измерен.
+Измеряются распределение доли между пунктами и контраст hub-кластера
+(Q01, Q06, Q09, Q11, Q20, Q26) против остальных двадцати пунктов.
+
+```{r floor_verdict_caveat, results='asis'}
+# Исход не объявляется прозой: он читается из FloorStratum/floor_verdict.csv, где
+# выбран по двум групповым тестам с поправкой Холма. Хардкод противоречил бы
+# таблицам под ним на любой другой выборке.
+floor_verdict <- local({
+  p <- file.path(OUT, "FloorStratum/floor_verdict.csv")
+  if (!file.exists(p)) return(NULL)
+  fv <- tryCatch(readr::read_csv(p, col_types = readr::cols(.default = "c")),
+                 error = function(e) NULL)
+  if (is.null(fv) || !all(c("Metric", "Value") %in% names(fv))) return(NULL)
+  fv
+})
+if (!is.null(floor_verdict)) {
+  fv <- setNames(floor_verdict$Value, floor_verdict$Metric)
+  cat(sprintf(paste0(
+    "Внутри страты (n = %s, балл &lt;= %s) средняя доля верных по всем пунктам равна ",
+    "<code>%s</code> при уровне чистого угадывания <code>%s</code> и структурном ",
+    "потолке <code>%s</code>. Доля на hub-кластере — <code>%s</code>, на остальных ",
+    "двадцати пунктах — <code>%s</code>; разность внутри респондента <code>%s</code>. ",
+    "Исход: <strong>%s</strong> — %s.\n\n"),
+    esc(fv[["N_floor"]]), esc(fv[["Floor_cut"]]), esc(fv[["Implied_mean_p"]]),
+    esc(fv[["P_guess"]]), esc(fv[["Structural_bound_p"]]),
+    esc(fv[["Hub_mean_p"]]), esc(fv[["Rest_mean_p"]]), esc(fv[["Hub_minus_rest"]]),
+    esc(fv[["Outcome"]]), esc(fv[["Reading"]])))
+}
+```
+
+```{r floor_tables, results='asis'}
+tbl("FloorStratum/floor_verdict.csv", "Вердикт по floor-страте и границы отбора")
+fig("FloorStratum/plots/floor_conditional_p.png",
+    "Условная доля верных по пунктам внутри floor-страты: точечная оценка с 95% ДИ против уровня угадывания")
+tbl("FloorStratum/floor_item_proportions.csv",
+    "Доля верных по каждому пункту внутри floor-страты", digits = 4)
+tbl("FloorStratum/floor_group_tests.csv",
+    "Группы пунктов: hub-кластер против остальных", digits = 4)
+tbl("FloorStratum/floor_contrasts.csv",
+    "Контрасты внутри страты: Cochran Q, парный hub/остальные, chi2 2x2", digits = 4)
+```
+
+## Пересчёт 2PL без floor-страты
+
+```{r floor_nofloor, results='asis'}
+tbl("FloorStratum/nofloor_2pl_status.csv", "Сходимость рефита 2PL без floor-страты")
+tbl("FloorStratum/nofloor_2pl_params.csv",
+    "Попунктные a и b на подвыборке без floor-страты", digits = 3)
+```
+
+## Person-fit, смесь с классом угадывания, hub-кластер как фактор
+
+```{r floor_extra, results='asis'}
+tbl("FloorStratum/person_fit_summary.csv", "Person-fit по стратам: Zh (lz) и ошибки Гуттмана",
+    digits = 3)
+tbl("FloorStratum/mixture_summary.csv", "Смесь «чистое угадывание + 2PL»: доля класса случайных ответов")
+tbl("FloorStratum/mixture_by_stratum.csv", "Тот же класс в разбивке по стратам", digits = 3)
+tbl("FloorStratum/hub_bifactor_status.csv",
+    "Сходимость бифакторной 2PL со специфическим фактором на hub-кластере")
+tbl("FloorStratum/hub_bifactor_indices.csv",
+    "Индексы бифакторной 2PL с S_hub: omega_h, ECV, ECV_S_hub, PUC", digits = 3)
+tbl("FloorStratum/hub_bifactor_loadings.csv",
+    "Нагрузки бифакторной 2PL с S_hub", digits = 3, collapse = TRUE)
+tbl("FloorStratum/nohub_structure.csv",
+    "Структура и надёжность на 20 пунктах без hub-кластера", digits = 3)
+tbl("FloorStratum/nohub_eigenvalues.csv",
+    "Собственные значения 20 пунктов против линии параллельного анализа",
+    digits = 3, collapse = TRUE)
+log_block("FloorStratum/floor_stratum_report.txt")
+```

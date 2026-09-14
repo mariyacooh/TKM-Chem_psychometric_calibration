@@ -1,0 +1,28 @@
+# Ephemeral R container for pipeline checks: `up` before a run, `down` after.
+# No persistent hand-configured container -- the image is built from
+# docker/Dockerfile (pinned R + baked deps). Repo bind-mounted at /proj so
+# output/ is written back to the host.
+name: main253
+
+services:
+  r:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        # Отпечаток входов сборки; считает и передаёт его container.py.
+        DEPS_FINGERPRINT: ${MAIN253_DEPS_FINGERPRINT:-unknown}
+    image: main253:4.6.0
+    # Имя закреплено, а не сгенерировано compose (`main253-r-1` зависит от версии
+    # compose и имени проекта): именно его принимает `go.py -docker <name>`, и оно
+    # обязано быть предсказуемым.
+    container_name: main253
+    working_dir: /proj
+    volumes:
+      - ..:/proj
+    # Keep the container alive so `up -d` gives something to exec steps into.
+    command: ["sleep", "infinity"]
+    # tini как PID 1: без него `sleep` — сам PID 1 и по правилам ядра игнорирует
+    # SIGTERM (нет своего обработчика), поэтому `compose down` ждёт все 10 с grace
+    # period и добивает SIGKILL. С init teardown ~1 с.
+    init: true

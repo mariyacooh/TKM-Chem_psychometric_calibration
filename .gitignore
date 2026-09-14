@@ -1,0 +1,24 @@
+*.log
+
+# Артефакты рендера R Markdown
+/scripts/report_files/
+/scripts/report_cache/
+/scripts/report*.html
+/scripts/report.knit.md
+/Rplots.pdf
+
+# Результаты
+/output/
+
+# Python — байт-код и мусор инструментов вокруг точек входа (go.py, container.py)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Настройки редактора
+/.vscode/
